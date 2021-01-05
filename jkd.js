@@ -2,34 +2,31 @@
 聚看点，所有任务+阅读
 欢迎填写邀请码：24230233
 点我的获取Cookie
-
 =============环境变量=============
 JKD_COOKIE cookies，可选择用&、@、换行隔开
 JKD_USER_AGENT 用户ua，默认为ios
 JKD_WITHDRAW 提现金额
 JKD_FAKE_IOS 将安卓cookie伪装成iOS 默认伪装，填写任意值
+JKD_NOTIFY 是否开启通知，开启则22点通知一次
 ================Qx==============
 [task_local]
 0,30 7-22/1 * * * https://raw.githubusercontent.com/shylocks/Loon/main/jkd.js, tag=聚看点
 [rewrite_local]
 https:\/\/www\.xiaodouzhuan\.cn\/jkd\/newMobileMenu\/infoMe\.action url script-request-body https://raw.githubusercontent.com/shylocks/Loon/main/jkd.js
-
 ================Loon==============
 [Script]
 http-request https:\/\/www\.xiaodouzhuan\.cn\/jkd\/newMobileMenu\/infoMe\.action  script-path=https://raw.githubusercontent.com/shylocks/Loon/main/jkd.js, requires-body=true, timeout=100, tag=聚看点
 cron "0,30 7-22/1 * * *" script-path=https://raw.githubusercontent.com/shylocks/Loon/main/jkd.js
-
 ===============Surge=================
 [Script]
 聚看点 = type=http-request,pattern=https:\/\/www\.xiaodouzhuan\.cn\/jkd\/newMobileMenu\/infoMe\.action ,script-path=https://raw.githubusercontent.com/shylocks/Loon/main/jkd.js
 聚看点 = type=cron,cronexp="0,30 7-22/1 * * *",wake-system=1,timeout=900,script-path=https://raw.githubusercontent.com/shylocks/Loon/main/jkd.js
-
 ===============MITM=================
 [MITM]
 hostname = www.xiaodouzhuan.cn
 */
 const API_HOST = 'https://www.xiaodouzhuan.cn'
-let UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'
+let UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_2_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148'
 const DATE = `${new Date().getUTCFullYear()}${(new Date().getUTCMonth() + 1).toString().padStart(2, "0")}${new Date().getUTCDate().toString().padStart(2, "0")}`
 let liveBody = null, fakeIOS = true
 const $ = new Env("聚看点")
@@ -38,7 +35,8 @@ let cookiesArr = [
   // '', // xz_jkd_appkey=xxx; JSESSIONID=xxx; UM_distinctid=xxx; （账号1ck）
   // '', // xz_jkd_appkey=xxx; JSESSIONID=xxx; UM_distinctid=xxx; （账号2ck）
 ], cookie = '', message;
-let notify = !$.isNode() ? $.getdata("JKD_MSG") : true
+let notify = !$.isNode() ? $.getdata("JKD_MSG") : !!process.env.JKD_NOTIFY
+const ntf = $.isNode() ? require('./sendNotify') : '';
 
 async function getCookie() {
   if ($request && $request.method !== `OPTIONS`) {
@@ -103,6 +101,9 @@ if (typeof $request !== 'undefined') {
           cookiesArr.push(JKCookie[item])
         }
       })
+      if (process.env.TENCENTCLOUD_RUNENV) {
+        $.scf = true
+      }
       if (process.env.JKD_DEBUG && process.env.JKD_DEBUG === 'false') console.log = () => {
       };
     } else {
@@ -184,7 +185,7 @@ if (typeof $request !== 'undefined') {
 
       if (!$.isNode()) {
         $.setdata(JSON.stringify(liveBody), "jkdLiveBody")
-      } else {
+      } else if (!$.scf) {
         const fs = require('fs');
         try {
           await fs.writeFileSync('jkd.json', JSON.stringify(liveBody));
@@ -228,11 +229,14 @@ function requireConfig() {
   }
 }
 
-function showMsg() {
+async function showMsg() {
   if (!$.isNode() || notify) {
     $.msg(`【账号${$.name}${$.index} ${$.userName}】`, `${$.gold}，当前 ${$.current} 元，累计 ${$.sum} 元`, $.message)
   } else {
     $.log(`【账号${$.name}${$.index} ${$.userName}】\n ${$.gold}，当前 ${$.current} 元，累计 ${$.sum} 元\n ${$.message}`)
+    if (new Date().getUTCHours() === 14 && new Date().getUTCMinutes() < 10 && notify) {
+      await ntf.sendNotify(`【${$.name}账号${$.index} ${$.userName}】`, `${$.gold}，当前 ${$.current} 元，累计 ${$.sum} 元\n`);
+    }
   }
 }
 
@@ -260,7 +264,7 @@ async function jkd() {
     }
   }
   // await getTaskList() // 任务
-  for (let i = 0; i < $.videoPacketNum; ++i) {
+  for (let i = 0; i < $.videoPacketNum && !$.scf; ++i) {
     $.log(`去看激励视频`)
     await adv(17)
   }
@@ -348,7 +352,7 @@ function userLive(body) {
     "appversioncode": $.version,
     "time": new Date().getTime(),
     "apptoken": "xzwltoken070704",
-    "appversion": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "appversion": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
     "openid": $.openId,
     "os": $.iOS ? "iOS" : "android",
     "opdate": `${DATE}`
@@ -441,7 +445,7 @@ function getTaskList() {
     "appversioncode": $.version,
     "time": new Date().getTime(),
     "apptoken": "xzwltoken070704",
-    "appversion": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "appversion": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
     "openid": $.openId,
     "os": $.iOS ? "iOS" : "android",
     "listtype": "wealnews",
@@ -497,7 +501,7 @@ function doTask(taskId, taskName, action) {
     "appversioncode": `${$.version}`,
     "time": `${new Date().getTime()}`,
     "apptoken": "xzwltoken070704",
-    "appversion": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "appversion": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
     "openid": $.openID,
     "os": $.iOS ? "iOS" : "android",
     "operatepath": "adDetail",
@@ -578,7 +582,7 @@ function getUserInfo() {
     "psign": "92dea068b6c271161be05ed358b59932",
     "apptoken": "xzwltoken070704",
     "appid": "xzwl",
-    "appversion": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "appversion": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
   }
   return new Promise(resolve => {
     $.post(taskPostUrl("jkd/newMobileMenu/infoMe.action",
@@ -654,7 +658,7 @@ function getTaskBoxProfit(boxType = 1) {
             if (data['ret'] === 'ok') {
               $.log(`摇钱树开启成功，获得 ${data.profit} 金币`)
               $.profit += data.profit
-              if (data.advertPopup && data.advertPopup.advert) {
+              if (data.advertPopup && data.advertPopup.advert && !$.scf) {
                 $.log(`去做额外翻倍任务`)
                 await adv(data.advertPopup.position)
               }
@@ -685,7 +689,7 @@ function signShare(position) {
     "position": position,
     "apptoken": "xzwltoken070704",
     "appid": "xzwl",
-    "appversion": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "appversion": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
   }
   return new Promise(resolve => {
     $.post(taskPostUrl("jkd/account/signShareAccount.action",
@@ -721,6 +725,7 @@ function signShare(position) {
 }
 
 function adv(position) {
+  if ($.scf) return
   let body = {
     "openid": $.openId,
     "channel": $.iOS ? "iOS" : "android",
@@ -731,7 +736,7 @@ function adv(position) {
     "position": position,
     "apptoken": "xzwltoken070704",
     "appid": "xzwl",
-    "appversion": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "appversion": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
   }
   return new Promise(resolve => {
     $.post(taskPostUrl("jkd/newmobile/stimulateAdv.action",
@@ -808,7 +813,7 @@ function getArticleList(categoryId = 3) {
     "cateid": categoryId,
     "openid": $.openId,
     "os": $.iOS ? "iOS" : "android",
-    "appversion": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "appversion": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
     "operatorType": 2,
     "page": 12
   }
@@ -847,7 +852,7 @@ function openTimeBox() {
     "psign": "92dea068b6c271161be05ed358b59932",
     "apptoken": "xzwltoken070704",
     "appid": "xzwl",
-    "appversion": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "appversion": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
   }
   return new Promise(resolve => {
     $.post(taskPostUrl("jkd/account/openTimeBoxAccount.action",
@@ -886,7 +891,7 @@ function getArticle(artId) {
   let body = {
     "time": `${new Date().getTime()}`,
     "apptoken": "xzwltoken070704",
-    "appversion": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "appversion": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
     "openid": $.openId,
     "channel": $.iOS ? "iOS" : "android",
     "os": $.iOS ? "iOS" : "android",
@@ -930,7 +935,7 @@ function getVideo(artId) {
     "openid": $.openId,
     "os": $.iOS ? "iOS" : "android",
     "artid": artId,
-    "appversion": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "appversion": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
     "relate": "1",
     "scenetype": ""
   }
@@ -998,7 +1003,7 @@ function call2(uuid, opttype = "ART_READ") {
     "vercode": `${$.version}`,
     "psign": "92dea068b6c271161be05ed358b59932",
     "app_token": "xzwltoken070704",
-    "version": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "version": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
     "pars": {
       "openID": $.openId,
       "uniqueid": uuid,
@@ -1050,7 +1055,7 @@ function call3(uuid, opttype = "ART_READ") {
     "vercode": `${$.version}`,
     "psign": "92dea068b6c271161be05ed358b59932",
     "app_token": "xzwltoken070704",
-    "version": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "version": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
     "pars": {
       "openID": $.openId,
       "uniqueid": uuid,
@@ -1102,7 +1107,7 @@ function call1(uuid, article_id, opttype = "INF_ART_COMMENTS") {
     "vercode": `${$.version}`,
     "psign": "92dea068b6c271161be05ed358b59932",
     "app_token": "xzwltoken070704",
-    "version": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "version": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
     "pars": {
       "openID": $.openId,
       "uniqueid": uuid,
@@ -1228,7 +1233,7 @@ function readAccount(artId, payType = 1) {
     "appversioncode": `${$.version}`,
     "time": `${new Date().getTime()}`,
     "apptoken": "xzwltoken070704",
-    "appversion": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "appversion": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
     "openid": $.openId,
     "os": $.iOS ? "iOS" : "android",
     "artid": artId,
@@ -1276,7 +1281,7 @@ function videoAccount(artId) {
     "appversioncode": $.version,
     "time": new Date().toString(),
     "apptoken": "xzwltoken070704",
-    "appversion": fakeIOS?'5.6.5':$.version.toString().split('').join('.'),
+    "appversion": fakeIOS ? '5.6.5' : $.version.toString().split('').join('.'),
     "openid": $.openId,
     "os": $.iOS ? "iOS" : "android",
     "artid": artId,
