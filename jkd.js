@@ -76,6 +76,7 @@ if (typeof $request !== 'undefined') {
     $.done()
   }).finally(() => {
     $.done()
+    resolve()
   })
 } else {
   !(async () => {
