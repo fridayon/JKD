@@ -23,11 +23,9 @@ jobs:
           node-version: 10.x
       - name: npm install
         run: |
-          cd ~/scripts
           npm install
       - name: '运行 【聚看点】'
         run: |
-          cd ~/scripts
           node jkd.js
         env:
           JKD_COOKIE: ${{ secrets.JKD_COOKIE }}
